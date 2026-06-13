@@ -1,0 +1,53 @@
+hydra:
+  run:
+    dir: ./experiments/FedDuet/${scenario}/${dataset}_${initial_increment}-${increment}-${method}-${com}-iid
+  job:
+    chdir: true
+
+  job_logging:
+    version: 1
+    formatters:
+      simple:
+        format: '%(message)s'
+
+class_order: ""
+dataset_root: ""
+workdir: ""
+log_path: "metrics.json"
+model_name: "ViT-B/16"
+prompt_template: "a bad photo of a {}."
+
+compress: False
+
+batch_size: 32
+increment: ${initial_increment}
+initial_increment: 20
+scenario: "class"
+dataset: "cifar100"
+class_num: 100
+lr: 3e-4
+
+method: "CIFAR_100_FedDuet_Incremental_10_iid"
+use_FedDuet: True
+
+federated: True
+iid : True
+num_clients : 2
+com : 3
+client_epochs : 1
+use_MoE_Adapters : True
+fp16: True
+
+mixed_precision: fp16
+
+
+
+device: "cuda"
+gpu: 1
+seed: 42
+
+
+num_experts : 2
+n_shared_experts: 1
+top_k : 2
+use_mlp: True
