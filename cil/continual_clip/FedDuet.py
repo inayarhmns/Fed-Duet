@@ -614,7 +614,8 @@ class FedDuetTrainer:
                     print(f"[Client {client_id}] Iteration {iteration + 1}/{total_iterations} | Loss: {running_loss:.4f}, Acc: {running_accuracy:.4f}")
             scaler.scale(total_loss).backward()
 
-            if (iteration + 1) % accumulation_steps == 0 or (iteration + 1) == total_iterations:
+            # every iteration, DO FORWARD AND BACKWARD. but the gradient updates are done after every accumulation_steps iterations, or at the end of training. This simulates a larger batch size and can help stabilize training when GPU memory is limited.
+            if (iteration + 1) % accumulation_steps == 0 or (iteration + 1) == total_iterations: # gradient updates are done every accumulation_steps iterations, or at the end of training
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=self.gradient_clip_norm)
                 scaler.step(optimizer)
@@ -707,7 +708,7 @@ class FedDuetTrainer:
                 # taking moe params here
                 moe_state = {
                     n: p.detach().cpu() for n, p in self.client_model.named_parameters() if any(k in n for k in self._moe_param_names)}
-                client_state_for_agg = {'moe': moe_state} # moe params are collected every round
+                client_state_for_agg = {'moe': moe_state} # moe params are collected every round and will be sent back to the server
 
                 p_params_for_current_agg = {}
 
@@ -720,7 +721,7 @@ class FedDuetTrainer:
                         if any(k in n for k in ("prompt_learner", "fusion_gating", "adaptmlp_list"))
                     }
                     p_params_for_current_agg.update(final_p_state)
-
+                # personalized here are model states that are sent back to server, only averaged and updated in the final round and saved in each client
                 if p_params_for_current_agg:
                     client_state_for_agg['personalized'] = p_params_for_current_agg
                 # collecting client_state after training
@@ -751,7 +752,7 @@ class FedDuetTrainer:
                             for i, state in enumerate(client_states):
                                 weighted_sum += client_weights[i] * state['moe'][key].to(global_state[key].device)
                             global_state[key] = weighted_sum
-
+            # this aggregates the personalized parameters
             if client_states and 'personalized' in client_states[0]:
                 print("\n--- aggregate Personalized parameters ---")
                 personal_params_to_agg = client_states[0]['personalized'].keys()
@@ -764,7 +765,7 @@ class FedDuetTrainer:
                         global_state[key] = weighted_sum
 
             self.global_model.load_state_dict(global_state)
-
+            
             for metric_name in ["loss", "accuracy"]:
                 values = [m[metric_name] for m in client_metrics]
 
