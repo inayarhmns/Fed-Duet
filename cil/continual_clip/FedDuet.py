@@ -432,14 +432,14 @@ class FedDuetTrainer:
             self.client_sizes.append(len(client_subset))
 
             # Print shapes and tensor data
-            print("Features Batch Shape client_loader:", client_loader.dataset[0][0].shape)
+            print("Features Batch Shape client_loader:", client_loader.dataset[0][0].shape) # for example, 3, 224, 224. Means 3 channels, 224 height, 224 width.
             print("Labels Batch Shape client_loader:", client_loader.dataset[0][1].shape)
             print("Actual Data Samples client_loader:\n", client_loader.dataset[0][0])
 
         self.prompt_pool_size = getattr(cfg, "prompt_pool_size", 64)
         with torch.no_grad():
             base_ctx = self.global_model.prompt_learner.ctx.detach().clone()  # (n_ctx,d)
-        print(f"self.prompt_pool_size: {self.prompt_pool_size}, base_ctx shape: {base_ctx.shape}")
+        
         if getattr(cfg, "scenario", "class") == "domain":
             class_file_path = "cil/dataset_reqs/domainnet_classes.txt"
         else:
@@ -452,8 +452,8 @@ class FedDuetTrainer:
             clip_model=self.global_model.clip_model,
             class_file=class_file_path
         )
-
-        self.num_experts_per_client = getattr(cfg, "num_experts", 8)
+        print(f"self.prompt_pool_size: {self.prompt_pool_size}, base_ctx shape: {base_ctx.shape}") # for example, base_ctx shape: torch.Size([16, 512]). Means n_ctx=16, ctx_dim=512.
+        self.num_experts_per_client = getattr(cfg, "num_experts", 8) # this is for fine-grained experts per client
 
         self.feature_dim = base_ctx.shape[-1]
         gate_hidden = getattr(cfg, "gate_hidden_dim", 512)
@@ -465,7 +465,7 @@ class FedDuetTrainer:
         self.client_features = [None] * self.num_clients
 
         moe_keywords = ("adaptmlp_list", "router", "noise", "shared_expert")
-        # doesnt use moe at all for adapters
+        # if the config explicitly says not to unfreeze moe params, then freeze them. By default, we unfreeze them for training
         unfreeze_moe = getattr(cfg, "unfreeze_moe", True)
         if not unfreeze_moe:
             for model in (self.global_model, self.client_model):
@@ -474,7 +474,7 @@ class FedDuetTrainer:
                         p.requires_grad = False
 
         self.upload_moe_params = getattr(cfg, "upload_moe_params", True)
-        # adapters are only moe_keywordsd
+        # if unfreeze_moe is set True in config, unfreeze moe_keywords adapters 
         if (not self.upload_moe_params) and (not unfreeze_moe):
             for model in (self.global_model, self.client_model):
                 for n, p in model.named_parameters():
@@ -504,19 +504,19 @@ class FedDuetTrainer:
 
         for p in self.client_model.parameters():
             p.requires_grad = False
-        # parametric pathway stage
+        # parametric pathway unfreezing
         if self.current_round < self.com_rounds // 2:
             print(f"[Client {client_id}] Round {self.current_round}: Train Parametric Experts")
             for name, p in self.client_model.named_parameters():
-                print(f"Unfreezing {name} for training.")
+                print(f"[PARAMETRIC] Unfreezing {name} for training.")
                 if any(k in name for k in moe_keywords):
                     p.requires_grad = True
-        # semantic pathway stage
+        # semantic pathway unfreezing
         else:
             print(f"[Client {client_id}] Round {self.current_round}: Train Semantic Experts")
             for name, p in self.client_model.named_parameters():
                 if any(k in name for k in prompt_keywords):
-                    print(f"Unfreezing {name} for training.")
+                    print(f"[SEMANTIC] Unfreezing {name} for training.")
                     p.requires_grad = True
 
 
@@ -570,7 +570,7 @@ class FedDuetTrainer:
         total_iterations = len(train_loader) * self.client_epochs
         scheduler = utils.cosine_lr(optimizer, self.cfg.lr, 30, total_iterations)
         train_iter = iter(train_loader)
-        progress_bar = tqdm(range(total_iterations), desc=f"客户端 {client_id} 训练 (任务 {self.task_id})")
+        progress_bar = tqdm(range(total_iterations), desc=f"Client {client_id} is trained on task {self.task_id})")
 
         client_metrics = defaultdict(list)
 
@@ -595,7 +595,7 @@ class FedDuetTrainer:
 
 
             with torch.cuda.amp.autocast():
-                output, moe_loss = self.client_model(inputs, task_id=self.task_id)
+                output, moe_loss = self.client_model(inputs, task_id=self.task_id) # forward
 
                 cls_loss = F.cross_entropy(output, targets, label_smoothing=getattr(self.cfg, "ls", 0.0))
                 total_loss = cls_loss
@@ -609,7 +609,7 @@ class FedDuetTrainer:
                     batch_accuracy = (predicted == targets).float().mean().item()
                     running_accuracy = 0.9 * running_accuracy + 0.1 * batch_accuracy
                     running_loss = 0.9 * running_loss + 0.1 * total_loss.item() * accumulation_steps
-            
+                    print(f"[Client {client_id}] Iteration {iteration + 1}/{total_iterations} | Loss: {running_loss:.4f}, Acc: {running_accuracy:.4f}")
             scaler.scale(total_loss).backward()
 
             if (iteration + 1) % accumulation_steps == 0 or (iteration + 1) == total_iterations:
@@ -685,10 +685,17 @@ class FedDuetTrainer:
 
                 expert_ctx_list = [self.prompt_pool.prompts[idx].to(self.device) for idx in indices]
                 # print(f"[Server] Round {global_round} | Client {client_id} 分配专家索引: {indices}")
+                print(f"indices for client {client_id}: {indices}")
+                print(f"expert_ctx_list shape for client {client_id}: { expert_ctx_list.shape if isinstance(expert_ctx_list, torch.Tensor) else [ctx.shape for ctx in expert_ctx_list]}")
                 print(f"expert_ctx_list for client {client_id}: {expert_ctx_list}")
+
+
                 self.client_model.set_global_experts(expert_ctx_list)
 
                 client_metric, feat_summary = self._train_client(client_id, client_loader, indices)
+                print(f"[Client {client_id}] client_metric: {client_metric}")
+                print(f"[Client {client_id}] feat_summary: {feat_summary}")
+
                 client_metrics.append(client_metric)
         
                 self.client_features[client_id] = feat_summary.detach().cpu()
@@ -696,13 +703,14 @@ class FedDuetTrainer:
                 is_final_round = global_round == self.com_rounds - 1
 
                 # taking moe params here
-                moe_state = {n: p.detach().cpu() for n, p in self.client_model.named_parameters() if any(k in n for k in self._moe_param_names)}
-                client_state_for_agg = {'moe': moe_state}
+                moe_state = {
+                    n: p.detach().cpu() for n, p in self.client_model.named_parameters() if any(k in n for k in self._moe_param_names)}
+                client_state_for_agg = {'moe': moe_state} # moe params are collected every round
 
                 p_params_for_current_agg = {}
 
 
-                if is_final_round:
+                if is_final_round: # if it is the final round, collect the state of the client parameters
                     print(f"[Client {client_id}] In the final round, all personalized parameters are collected for the final aggregation.")
                     final_p_state = {
                         n: p.detach().cpu()
@@ -713,7 +721,7 @@ class FedDuetTrainer:
 
                 if p_params_for_current_agg:
                     client_state_for_agg['personalized'] = p_params_for_current_agg
-
+                # collecting client_state after training
                 client_states.append(client_state_for_agg)
 
 
