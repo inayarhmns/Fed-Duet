@@ -564,10 +564,12 @@ class FedDuetTrainer:
             weight_decay=getattr(self.cfg, "weight_decay", 0.01)
         )
         scaler = torch.cuda.amp.GradScaler()
-
+        # accumulation_steps is a trick to simulate a larger batch size when the GPU doesn't have enough memory to fit a large batch. 
+        # So the gradients are accumulated over multiple iterations before performing an optimizer step. 
+        #For example, if accumulation_steps=4, the model will accumulate gradients for 4 batches before updating the weights.         
         accumulation_steps = getattr(self.cfg, "gradient_accumulation_steps", 1)
 
-        total_iterations = len(train_loader) * self.client_epochs
+        total_iterations = len(train_loader) * self.client_epochs # len(train_loader) is the number of batches, not the batch_size 
         scheduler = utils.cosine_lr(optimizer, self.cfg.lr, 30, total_iterations)
         train_iter = iter(train_loader)
         progress_bar = tqdm(range(total_iterations), desc=f"Client {client_id} is trained on task {self.task_id})")
@@ -579,9 +581,9 @@ class FedDuetTrainer:
         
         optimizer.zero_grad()
 
-        for iteration in range(total_iterations):
+        for iteration in range(total_iterations): 
             try:
-                inputs, targets, task_ids = next(train_iter)
+                inputs, targets, task_ids = next(train_iter) # this processes each batch, with each of the size batch_size.
             except StopIteration:
                 train_iter = iter(train_loader)
                 inputs, targets, task_ids = next(train_iter)
@@ -606,8 +608,8 @@ class FedDuetTrainer:
 
                 with torch.no_grad():
                     _, predicted = torch.max(output, 1)
-                    batch_accuracy = (predicted == targets).float().mean().item()
-                    running_accuracy = 0.9 * running_accuracy + 0.1 * batch_accuracy
+                    batch_accuracy = (predicted == targets).float().mean().item() # accuracy is averaged within batch
+                    running_accuracy = 0.9 * running_accuracy + 0.1 * batch_accuracy # weighted accuracy of current running accuracy and the batch (averaged) accuracy. 
                     running_loss = 0.9 * running_loss + 0.1 * total_loss.item() * accumulation_steps
                     print(f"[Client {client_id}] Iteration {iteration + 1}/{total_iterations} | Loss: {running_loss:.4f}, Acc: {running_accuracy:.4f}")
             scaler.scale(total_loss).backward()
