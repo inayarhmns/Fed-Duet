@@ -61,22 +61,26 @@ class ClassIncremental(nn.Module):
 
 
     def adaptation(self, task_id, cfg, train_dataset, train_classes_names,_old_network = None,eval_dataset=None):
-        # 获取当前任务的类别名称（不是累积的）
+        
+        # category name of the current task (not cumulative)
         current_task_class_names = self.get_task_classes(task_id)
-
-        # 只有在评估时才需要累积所有类别
+        print(f"Class-IL Task {task_id}: Training with classes {current_task_class_names}.")
+        # Accumulation of all categories is only necessary during evaluation.
         if not hasattr(self, 'current_class_names'):
             self.current_class_names = []
         self.current_class_names += current_task_class_names
 
-        # 更新tokenized text (仅用于评估)
+        # 更新tokenized text (仅用于评估) -> e.g. tokenize "a bad photo of cat"
         self.text_tokens = clip.tokenize(
             [self.prompt_template.format(c) for c in self.current_class_names]
         ).to(self.device)
-
+        #TODO: whats this for?
         if cfg.method != "zeroshot":
+            # update_prompt_learner is updating the CoOp style prompt vectors. 
+            # instead of starting from the start "a bad photo of cat" 
+            # it starts from the learned prompt vectors of the previous task and expands it to accommodate new classes. 
             # 对于fedduet，确保模型在训练前使用正确的上下文
-            if hasattr(self.model, 'update_prompt_learner'):
+            if hasattr(self.model, 'update_prompt_learner'): 
                 # 训练时只使用当前任务的类别，但保持累积的类别列表以供评估使用
                     if task_id > 0 and hasattr(self, 'ctx') and self.ctx is not None:
                         self.model.update_prompt_learner(prev_ctx=self.ctx, new_classnames=current_task_class_names)
@@ -102,13 +106,13 @@ class ClassIncremental(nn.Module):
         # move model to device
         self.model = self.model.cuda()
         devices = list(range(torch.cuda.device_count()))
-        # print("Using devices", devices)
+        print("Using devices", devices)
 
         # text
         classnames = get_class_names(self.classes_names, self.class_ids_per_task[task_id])
-        # print(classnames)
+        print(classnames)
         texts = [self.prompt_template.format(c) for c in classnames]
-
+        print(f"texts: {texts}")
         #print("train_dataset class order:", train_classes_names)
         texts = clip.tokenize(texts).to(self.device)
 
@@ -117,7 +121,7 @@ class ClassIncremental(nn.Module):
         all_seen_texts = clip.tokenize(
             [self.prompt_template.format(c) for c in self.current_class_names]
         ).to(self.device)
-
+        print(f"all_seen_texts: {all_seen_texts}")
 
         #TODO: If there are other methods, add here for training
 
@@ -129,7 +133,7 @@ class ClassIncremental(nn.Module):
                 # 调用 FedDuet 训练
                 print("using FedDuet")
                 global_model = self.model
-                client_model = copy.deepcopy(self.model)
+                client_model = copy.deepcopy(self.model) # this is for stability loss m later (comparing the old and the new model)
                 current_classnames = self.get_task_classes(task_id)
 
                 result = fedduet_train(

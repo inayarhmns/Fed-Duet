@@ -89,11 +89,11 @@ def continual_clip(cfg: DictConfig) -> None:
         cfg, is_train=False, transforms=model.transforms
     )
     # print(eval_dataset, eval_dataset)
-    # print('eval_classname', classes_names)
+    print('eval_classname', classes_names)
     train_dataset, train_classes_names = build_cl_scenarios(
         cfg, is_train=True, transforms=model.transforms
     )
-    # print('train_classes_names', train_classes_names)
+    print('train_classes_names', train_classes_names)
     model.classes_names = classes_names
 
 

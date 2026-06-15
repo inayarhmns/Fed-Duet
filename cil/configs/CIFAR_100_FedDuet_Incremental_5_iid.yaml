@@ -10,7 +10,7 @@ hydra:
       simple:
         format: '%(message)s'
 
-class_order: "cil/class_orders/cifar10.yaml"
+class_order: "/kaggle/working/Fed-Duet/cil/class_orders/cifar100.yaml"
 dataset_root: "/kaggle/working/data"
 workdir: ""
 log_path: "metrics.json"

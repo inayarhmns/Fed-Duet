@@ -427,6 +427,13 @@ class FedDuetTrainer:
             )
             self.clients_loaders.append(client_loader)
             self.client_sizes.append(len(client_subset))
+            data_iter = iter(client_loader)
+            features, labels = next(data_iter)
+
+            # Print shapes and tensor data
+            print("Features Batch Shape client_loader:", features.shape)
+            print("Labels Batch Shape client_loader:", labels.shape)
+            print("Actual Data Samples client_loader:\n", features)
 
         self.prompt_pool_size = getattr(cfg, "prompt_pool_size", 64)
         with torch.no_grad():
@@ -457,7 +464,7 @@ class FedDuetTrainer:
         self.client_features = [None] * self.num_clients
 
         moe_keywords = ("adaptmlp_list", "router", "noise", "shared_expert")
-
+        # doesnt use moe at all for adapters
         unfreeze_moe = getattr(cfg, "unfreeze_moe", True)
         if not unfreeze_moe:
             for model in (self.global_model, self.client_model):
@@ -466,7 +473,7 @@ class FedDuetTrainer:
                         p.requires_grad = False
 
         self.upload_moe_params = getattr(cfg, "upload_moe_params", True)
-
+        # adapters are only moe_keywordsd
         if (not self.upload_moe_params) and (not unfreeze_moe):
             for model in (self.global_model, self.client_model):
                 for n, p in model.named_parameters():
@@ -488,7 +495,7 @@ class FedDuetTrainer:
                                  any(k in n for k in moe_keywords)]
 
     def _train_client(self, client_id, train_loader, prompt_idx):
-        """训练单个客户端模型"""
+        """Training a single client model"""
         self.client_model.train()
 
         prompt_keywords = ("prompt_learner", "fusion_gating")
@@ -496,16 +503,19 @@ class FedDuetTrainer:
 
         for p in self.client_model.parameters():
             p.requires_grad = False
-
+        # parametric pathway stage
         if self.current_round < self.com_rounds // 2:
             print(f"[Client {client_id}] Round {self.current_round}: Train Parametric Experts")
             for name, p in self.client_model.named_parameters():
+                print(f"Unfreezing {name} for training.")
                 if any(k in name for k in moe_keywords):
                     p.requires_grad = True
+        # semantic pathway stage
         else:
             print(f"[Client {client_id}] Round {self.current_round}: Train Semantic Experts")
             for name, p in self.client_model.named_parameters():
                 if any(k in name for k in prompt_keywords):
+                    print(f"Unfreezing {name} for training.")
                     p.requires_grad = True
 
 
@@ -667,22 +677,24 @@ class FedDuetTrainer:
                         logits_pred = self.gate(self.client_features[client_id].to(self.device).to(torch.float32))
                     top_indices = logits_pred.argsort(descending=True)[:self.num_experts_per_client]
                     indices = top_indices.cpu().tolist()
+                    print(f"top_indices for client {client_id}: {indices}")
                 else:
                     # cold start
                     indices = random.sample(range(self.prompt_pool_size), self.num_experts_per_client)
 
                 expert_ctx_list = [self.prompt_pool.prompts[idx].to(self.device) for idx in indices]
                 # print(f"[Server] Round {global_round} | Client {client_id} 分配专家索引: {indices}")
-
+                print(f"expert_ctx_list for client {client_id}: {expert_ctx_list}")
                 self.client_model.set_global_experts(expert_ctx_list)
 
                 client_metric, feat_summary = self._train_client(client_id, client_loader, indices)
                 client_metrics.append(client_metric)
-
+        
                 self.client_features[client_id] = feat_summary.detach().cpu()
 
                 is_final_round = global_round == self.com_rounds - 1
 
+                # taking moe params here
                 moe_state = {n: p.detach().cpu() for n, p in self.client_model.named_parameters() if any(k in n for k in self._moe_param_names)}
                 client_state_for_agg = {'moe': moe_state}
 
@@ -690,7 +702,7 @@ class FedDuetTrainer:
 
 
                 if is_final_round:
-                    print(f"[Client {client_id}] 最后一轮，收集所有个性化参数用于最终聚合。")
+                    print(f"[Client {client_id}] In the final round, all personalized parameters are collected for the final aggregation.")
                     final_p_state = {
                         n: p.detach().cpu()
                         for n, p in self.client_model.named_parameters()
@@ -730,7 +742,7 @@ class FedDuetTrainer:
                             global_state[key] = weighted_sum
 
             if client_states and 'personalized' in client_states[0]:
-                print("\n--- 聚合 Personalized 参数 ---")
+                print("\n--- aggregate Personalized parameters ---")
                 personal_params_to_agg = client_states[0]['personalized'].keys()
 
                 for key in personal_params_to_agg:
@@ -749,7 +761,7 @@ class FedDuetTrainer:
                     values = [numpy.mean(v) for v in values]
 
                 weighted_avg = sum(v * w for v, w in zip(values, client_weights))
-                print(f"全局轮次 {global_round + 1} 平均{metric_name}: {weighted_avg:.6f}")
+                print(f"Global Round {global_round + 1} Average {metric_name}: {weighted_avg:.6f}")
 
             self._update_gate_network()
         self.evaluate_clients()
@@ -904,12 +916,12 @@ def fedduet_train(global_model, train_dataset, eval_dataset, cfg, texts, task_id
         torch.backends.cudnn.deterministic = True
 
     print("\n=== FedDuet 训练配置 ===")
-    print(f"联邦通信轮次: {getattr(cfg, 'com', 10)}")
-    print(f"客户端本地训练轮次: {getattr(cfg, 'client_epochs', 5)}")
-    print(f"学习率: {getattr(cfg, 'lr', 3e-5)}")
-    print(f"客户端数量: {getattr(cfg, 'num_clients', 5)}")
-    print(f"数据分布: {'IID' if getattr(cfg, 'iid', True) else 'Non-IID'}")
-    print(f"类别数量: {len(texts)}")
+    print(f"communcation rounds: {getattr(cfg, 'com', 10)}")
+    print(f"client epochs: {getattr(cfg, 'client_epochs', 5)}")
+    print(f"LR: {getattr(cfg, 'lr', 3e-5)}")
+    print(f"num clients: {getattr(cfg, 'num_clients', 5)}")
+    print(f"IID: {'IID' if getattr(cfg, 'iid', True) else 'Non-IID'}")
+    print(f"len(texts): {len(texts)}")
 
     wrapped_global_model = CustomCLIP(cfg, texts, global_model, prev_ctx, prev_fusion_state)
     wrapped_client_model = CustomCLIP(cfg, texts, client_model, prev_ctx, prev_fusion_state)
