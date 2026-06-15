@@ -45,8 +45,9 @@ class PromptPool(nn.Module):
             else:
                 prompt_data = self._random_init(K, base_prompt)
 
-        # 以 *buffer* 形式保存，意味着默认不参与梯度更新。
-        # 若需要在服务器端微调，可改为 nn.Parameter。
+   
+        # Saving in *buffer* format means it won't participate in gradient updates by default.
+        # If server-side fine-tuning is needed, change it to nn.Parameter.
         self.register_buffer("prompts", prompt_data)  # (K, n_ctx, ctx_dim)
 
     @staticmethod

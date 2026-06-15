@@ -56,21 +56,21 @@ class ClassIncremental(nn.Module):
 
 
     def get_task_classes(self, task_id):
-        """获取指定任务ID的类别名称"""
+        """Get the category name of the specified task ID"""
         return get_class_names(self.classes_names, self.class_ids_per_task[task_id])
 
 
     def adaptation(self, task_id, cfg, train_dataset, train_classes_names,_old_network = None,eval_dataset=None):
         
         # category name of the current task (not cumulative)
-        current_task_class_names = self.get_task_classes(task_id)
+        current_task_class_names = self.get_task_classes(task_id) #these are the classes from the dataset, e.g. CIFAR10, the 10 tasks of them.
         print(f"Class-IL Task {task_id}: Training with classes {current_task_class_names}.")
         # Accumulation of all categories is only necessary during evaluation.
         if not hasattr(self, 'current_class_names'):
             self.current_class_names = []
         self.current_class_names += current_task_class_names
 
-        # 更新tokenized text (仅用于评估) -> e.g. tokenize "a bad photo of cat"
+        # tokenize the class names
         self.text_tokens = clip.tokenize(
             [self.prompt_template.format(c) for c in self.current_class_names]
         ).to(self.device)
@@ -108,7 +108,8 @@ class ClassIncremental(nn.Module):
         devices = list(range(torch.cuda.device_count()))
         print("Using devices", devices)
 
-        # text
+        # texts only contains the number of classes of number of increments, e.g. 5
+        # e.g. texts: ['a bad photo of a airplane.', 'a bad photo of a automobile.', 'a bad photo of a bird.', 'a bad photo of a cat.', 'a bad photo of a deer.']
         classnames = get_class_names(self.classes_names, self.class_ids_per_task[task_id])
         print(classnames)
         texts = [self.prompt_template.format(c) for c in classnames]
@@ -118,10 +119,28 @@ class ClassIncremental(nn.Module):
 
         # All seen texts are only needed for evaluation in some methods, 
         # but training should use current task's texts.
+        # all_seen_texts contains the tokenized texts
+
         all_seen_texts = clip.tokenize(
             [self.prompt_template.format(c) for c in self.current_class_names]
         ).to(self.device)
         print(f"all_seen_texts: {all_seen_texts}")
+        # all_seen_texts: tensor([[49406,   320,  2103,  1125,   539,   320, 16451,   269, 49407,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0],
+        # [49406,   320,  2103,  1125,   539,   320, 25258,   269, 49407,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+        #      0,     0,     0,     0,     0,     0,     0],.. continue until it has increments dimension in the first dimension
 
         #TODO: If there are other methods, add here for training
 

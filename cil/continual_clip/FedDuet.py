@@ -59,7 +59,7 @@ class TextEncoder(nn.Module):
 
 
 class PromptLearner(nn.Module):
-    """Client-side prompt learner for local prompt vectors."""
+    """Client-side prompt learner for local prompt vectors. This is CoOp-style prompt vector maker"""
 
     def __init__(self, cfg, classnames, clip_model, prev_ctx=None):
         super().__init__()
@@ -99,6 +99,7 @@ class PromptLearner(nn.Module):
         classnames = [name.replace("_", " ") for name in classnames]
         name_lens = [len(_tokenizer.encode(name)) for name in classnames]
         prompts = [prompt_prefix + " " + name + "." for name in classnames]
+        print(f"[PromptLearner] Prompts: {prompts}")
 
         tokenized_prompts = torch.cat([clip.tokenize(p) for p in prompts]).to(device)
         with torch.no_grad():
@@ -228,7 +229,7 @@ class CustomCLIP(nn.Module):
         return None
 
     def load_ctx(self, ctx: torch.Tensor):
-        """将给定 ctx (n_ctx, d) 加载到 prompt_learner 以便编码。"""
+        """Load the given ctx (n_ctx, d) into prompt_learner for encoding."""
         state_dict = self.prompt_learner.state_dict()
         state_dict['ctx'] = ctx
         self.prompt_learner.load_state_dict(state_dict, strict=False)
@@ -259,7 +260,7 @@ class CustomCLIP(nn.Module):
 
         self.prompt_learner.load_state_dict(temp_local_state)
 
-    def update_prompt_learner(self, prev_ctx=None, new_classnames=None):
+    def update_prompt_learner(self, prev_ctx=None, new_classnames=None): # trigger making the promptlearner
         need_reinit = (new_classnames is not None) or (prev_ctx is not None)
 
         if not need_reinit:
@@ -273,8 +274,10 @@ class CustomCLIP(nn.Module):
 
 
         self.prompt_learner = PromptLearner(self.cfg, new_classnames, self.clip_model, prev_ctx)
+
         self.classnames = new_classnames
         self.tokenized_prompts = self.prompt_learner.tokenized_prompts
+        print(f"tokenized prompts: {self.tokenized_prompts}")
 
     def forward(self, image, text=None, task_id=None, is_train=True, prev_ctx=None):
         if task_id is not None:
@@ -427,23 +430,21 @@ class FedDuetTrainer:
             )
             self.clients_loaders.append(client_loader)
             self.client_sizes.append(len(client_subset))
-            data_iter = iter(client_loader)
-            features, labels = next(data_iter)
 
             # Print shapes and tensor data
-            print("Features Batch Shape client_loader:", features.shape)
-            print("Labels Batch Shape client_loader:", labels.shape)
-            print("Actual Data Samples client_loader:\n", features)
+            print("Features Batch Shape client_loader:", client_loader.dataset[0][0].shape)
+            print("Labels Batch Shape client_loader:", client_loader.dataset[0][1].shape)
+            print("Actual Data Samples client_loader:\n", client_loader.dataset[0][0])
 
         self.prompt_pool_size = getattr(cfg, "prompt_pool_size", 64)
         with torch.no_grad():
             base_ctx = self.global_model.prompt_learner.ctx.detach().clone()  # (n_ctx,d)
-
+        print(f"self.prompt_pool_size: {self.prompt_pool_size}, base_ctx shape: {base_ctx.shape}")
         if getattr(cfg, "scenario", "class") == "domain":
             class_file_path = "cil/dataset_reqs/domainnet_classes.txt"
         else:
             class_file_path = "cil/dataset_reqs/imagenet1000_classes.txt"
-
+        # here the server makes the prompt pool by kmeans of the classnames if CIL or domain names if DIL.
         self.prompt_pool = PromptPool(
             K=self.prompt_pool_size,
             base_prompt=base_ctx,
@@ -926,7 +927,7 @@ def fedduet_train(global_model, train_dataset, eval_dataset, cfg, texts, task_id
     wrapped_global_model = CustomCLIP(cfg, texts, global_model, prev_ctx, prev_fusion_state)
     wrapped_client_model = CustomCLIP(cfg, texts, client_model, prev_ctx, prev_fusion_state)
     
-    trainer = FedDuetTrainer(
+    trainer = FedDuetTrainer( # when initiating, the pool prompt is initiated.
         cfg=cfg,
         global_model=wrapped_global_model,
         client_model=wrapped_client_model,

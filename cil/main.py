@@ -84,8 +84,8 @@ def continual_clip(cfg: DictConfig) -> None:
     initial_model = deepcopy(model)
     initial_model.eval()
 
-
-    eval_dataset, classes_names = build_cl_scenarios(
+    
+    eval_dataset, classes_names = build_cl_scenarios(   # returns CIL class and the classnames
         cfg, is_train=False, transforms=model.transforms
     )
     # print(eval_dataset, eval_dataset)
@@ -109,7 +109,7 @@ def continual_clip(cfg: DictConfig) -> None:
 
         logging.info(f"Evaluation for task {task_id} has started.")
 
-
+        #training
         model.adaptation(task_id, cfg, train_dataset, train_classes_names, _old_network, eval_dataset)
         _old_network = copy.deepcopy(model)
         _old_network.eval()
