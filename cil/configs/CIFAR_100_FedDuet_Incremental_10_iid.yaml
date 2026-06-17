@@ -10,8 +10,8 @@ hydra:
       simple:
         format: '%(message)s'
 
-class_order: ""
-dataset_root: ""
+class_order: "/kaggle/working/Fed-Duet/cil/class_orders/cifar100.yaml"
+dataset_root: "/kaggle/working/data"
 workdir: ""
 log_path: "metrics.json"
 model_name: "ViT-B/16"
@@ -19,7 +19,7 @@ prompt_template: "a bad photo of a {}."
 
 compress: False
 
-batch_size: 16
+batch_size: 32
 increment: ${initial_increment}
 initial_increment: 10
 scenario: "class"
@@ -32,7 +32,7 @@ use_FedDuet: True
 
 federated: True
 iid : True
-num_clients : 5
+num_clients : 3
 com : 10
 client_epochs : 1
 use_MoE_Adapters : True

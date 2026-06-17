@@ -153,7 +153,7 @@ class ClassIncremental(nn.Module):
                 # 调用 FedDuet 训练
                 print("using FedDuet")
                 global_model = self.model
-                client_model = copy.deepcopy(self.model) # this is for stability loss m later (comparing the old and the new model)
+                client_model = copy.deepcopy(self.model) 
                 current_classnames = self.get_task_classes(task_id)
 
                 result = fedduet_train(

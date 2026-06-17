@@ -672,7 +672,7 @@ class FedDuetTrainer:
                 global_state_on_device = {k: v.to(self.device) for k, v in self.global_model.state_dict().items()}
                 self.client_model.load_state_dict(global_state_on_device, strict=False)
 
-                indices = random.sample(range(self.prompt_pool_size), self.num_experts_per_client)
+                indices = random.sample(range(self.prompt_pool_size), self.num_experts_per_client) # get num_experts_per_client indices from the prompt pool 
                 expert_ctx_list = [self.prompt_pool.prompts[idx].to(self.device) for idx in indices]
                 # print(f"[Server] Round {global_round} | Client {client_id} 分配专家索引: {indices}")
 
@@ -684,7 +684,7 @@ class FedDuetTrainer:
                     print(f"top_indices for client {client_id}: {indices}")
                 else:
                     # cold start
-                    indices = random.sample(range(self.prompt_pool_size), self.num_experts_per_client)
+                    indices = random.sample(range(self.prompt_pool_size), self.num_experts_per_client) # this is not needed actually, indices were already sampled before
 
                 expert_ctx_list = [self.prompt_pool.prompts[idx].to(self.device) for idx in indices]
                 # print(f"[Server] Round {global_round} | Client {client_id} 分配专家索引: {indices}")
