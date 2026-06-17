@@ -119,12 +119,13 @@ class ClassIncremental(nn.Module):
 
         # All seen texts are only needed for evaluation in some methods, 
         # but training should use current task's texts.
-        # all_seen_texts contains the tokenized texts
+        # all_seen_texts contains the tokenized texts of all classes seen so far, e.g. 50 classes after 10 increments with each 5 class per increment.
 
         all_seen_texts = clip.tokenize(
             [self.prompt_template.format(c) for c in self.current_class_names]
         ).to(self.device)
         print(f"all_seen_texts: {all_seen_texts}")
+        # here the text's token are different. 49406 = opening token, 49407 = closing token, 320 = "a", 2103 = "bad", 1125 = "photo", 539 = "of", 16451 = "airplane", 25258 = "automobile"
         # all_seen_texts: tensor([[49406,   320,  2103,  1125,   539,   320, 16451,   269, 49407,     0,
         #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
         #      0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
@@ -193,7 +194,7 @@ class ClassIncremental(nn.Module):
                 else:
                     raise ValueError(f"Unsupported federated method in this refactored version. Only 'FedDuet' is supported.")
 
-
+        self.model = self.model.cuda()
         self.model.eval()
 
 
@@ -320,7 +321,7 @@ class DomainIncremental(nn.Module):
                                                      new_classnames=self.classes_names)
 
 
-
+        self.model = self.model.cuda()
         self.model.eval()
 
 def load_model(cfg: DictConfig, device: torch.device) -> nn.Module:
