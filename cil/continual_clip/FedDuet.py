@@ -63,7 +63,7 @@ class PromptLearner(nn.Module):
 
     def __init__(self, cfg, classnames, clip_model, prev_ctx=None):
         super().__init__()
-        device = ÷torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         device = next(clip_model.parameters()).device 
         n_cls = len(classnames)
         n_ctx = getattr(cfg, "N_CTX", 16)
