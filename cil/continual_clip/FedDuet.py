@@ -63,8 +63,8 @@ class PromptLearner(nn.Module):
 
     def __init__(self, cfg, classnames, clip_model, prev_ctx=None):
         super().__init__()
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+        device = ÷torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = next(clip_model.parameters()).device 
         n_cls = len(classnames)
         n_ctx = getattr(cfg, "N_CTX", 16)
         ctx_init = getattr(cfg, "CTX_INIT", "")
@@ -787,7 +787,7 @@ class FedDuetTrainer:
         from torch.utils.data import ConcatDataset, Subset
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         client_accs = []
-
+        print(f"\n=== Evaluating Clients on Task {self.task_id} ===")
         if self.classes_names is not None:
             if getattr(self.cfg, "scenario", "class") == "domain":
                 seen_class_names = self.classes_names
@@ -848,7 +848,7 @@ class FedDuetTrainer:
 
         mean_acc = sum(client_accs) / len(client_accs) if client_accs else 0.0
 
-        print(f"[FedDuet] 任务 {self.task_id} | 平均准确率: {mean_acc:.2f}%")
+        print(f"[FedDuet] Task {self.task_id} | Mean acc: {mean_acc:.2f}%")
 
         prev_accs = self.mean_acc_history
         total_tasks_done = len(prev_accs) + 1
@@ -871,16 +871,16 @@ class FedDuetTrainer:
         with open(path, 'a+') as f:
             f.write(json.dumps(log_entry) + '\n')
 
-        print(f"[FedDuet] 任务 {self.task_id} | 累计平均准确率 (avg_acc): {avg_acc:.2f}%")
+        print(f"[FedDuet] Task {self.task_id} | Cumulative Average Accuracy (avg_acc): {avg_acc:.2f}%")
 
         return mean_acc
 
     def _update_prompt_pool(self):
-        """全局Prompt池不直接通过梯度更新，而是通过聚合客户端上传的专家/prompt。此函数占位。"""
+        """The global prompt pool does not update directly via gradients, but instead aggregates expert/prompts uploaded by the client. This function is a placeholder."""
         return
 
     def _update_gate_network(self):
-        """使用客户端上传的 <特征, 专家索引> 对来训练服务器端的门控网络。"""
+        """Use the <feature, expert index> pairs uploaded by the client to train the server-side gate network."""
         if not self._gate_train_buffer:
             return
 
@@ -907,7 +907,7 @@ class FedDuetTrainer:
         loss.backward()
         self.gate_optimizer.step()
 
-        print(f"[Gate] 更新完成，loss={loss.item():.4f}, batch={feats.size(0)}")
+        print(f"[Gate] update complete，loss={loss.item():.4f}, batch={feats.size(0)}")
 
         self._gate_train_buffer.clear()
 
