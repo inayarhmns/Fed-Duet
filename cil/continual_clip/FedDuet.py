@@ -507,16 +507,16 @@ class FedDuetTrainer:
         # parametric pathway unfreezing
         if self.current_round < self.com_rounds // 2:
             print(f"[Client {client_id}] Round {self.current_round}: Train Parametric Experts")
+            print(f"[PARAMETRIC] Unfreezing weights for training.")
             for name, p in self.client_model.named_parameters():
-                print(f"[PARAMETRIC] Unfreezing {name} for training.")
                 if any(k in name for k in moe_keywords):
                     p.requires_grad = True
         # semantic pathway unfreezing
         else:
             print(f"[Client {client_id}] Round {self.current_round}: Train Semantic Experts")
+            print(f"[SEMANTIC] Unfreezing weights for training.")
             for name, p in self.client_model.named_parameters():
                 if any(k in name for k in prompt_keywords):
-                    print(f"[SEMANTIC] Unfreezing {name} for training.")
                     p.requires_grad = True
 
 
@@ -721,7 +721,7 @@ class FedDuetTrainer:
                         if any(k in n for k in ("prompt_learner", "fusion_gating", "adaptmlp_list"))
                     }
                     p_params_for_current_agg.update(final_p_state)
-                # personalized here are model states that are sent back to server, only averaged and updated in the final round and saved in each client
+                # personalized here are model states that are not sent back to server, only averaged and updated in the final round and saved in each client
                 if p_params_for_current_agg:
                     client_state_for_agg['personalized'] = p_params_for_current_agg
                 # collecting client_state after training
@@ -765,7 +765,7 @@ class FedDuetTrainer:
                         global_state[key] = weighted_sum
 
             self.global_model.load_state_dict(global_state)
-            
+
             for metric_name in ["loss", "accuracy"]:
                 values = [m[metric_name] for m in client_metrics]
 
@@ -801,7 +801,7 @@ class FedDuetTrainer:
         else:
             seen_class_names = self.texts
 
-        for client_id in range(self.num_clients):
+        for client_id in range(self.num_clients): 
             subsets = []
             for t in range(self.task_id + 1):
                 task_dataset = self.eval_dataset[t:t + 1]
