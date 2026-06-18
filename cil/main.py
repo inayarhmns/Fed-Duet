@@ -121,7 +121,7 @@ def continual_clip(cfg: DictConfig) -> None:
             
             for inputs, targets, task_ids in tqdm(eval_loader, desc=f"CIL Eval Task {task_id}"):
                 inputs, targets = inputs.to(device), targets.to(device)
-                outputs = e(image=inputs, task_id=task_id)
+                outputs = model(image=inputs, task_id=task_id)
                 metric_logger.add([outputs.cpu().argmax(dim=1), targets.cpu(), task_ids], subset="test")
             
             current_accuracy = 100 * metric_logger.accuracy
