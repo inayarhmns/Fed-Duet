@@ -19,9 +19,9 @@ prompt_template: "a bad photo of a {}."
 
 compress: False
 
-batch_size: 32FF
+batch_size: 32
 increment: ${initial_increment}
-initial_increment: 20
+initial_increment: 5
 scenario: "class"
 dataset: "cifar100"
 class_num: 100

@@ -32,8 +32,8 @@ use_FedDuet: True
 
 federated: True
 iid : True
-num_clients : 3
-com : 10
+num_clients : 2
+com : 3
 client_epochs : 1
 use_MoE_Adapters : True
 fp16: True
