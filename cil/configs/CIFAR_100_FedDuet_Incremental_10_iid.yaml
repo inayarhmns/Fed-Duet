@@ -19,7 +19,7 @@ prompt_template: "a bad photo of a {}."
 
 compress: False
 
-batch_size: 32
+batch_size: 16
 increment: ${initial_increment}
 initial_increment: 10
 scenario: "class"
@@ -47,7 +47,7 @@ gpu: 1
 seed: 42
 
 
-num_experts : 8
+num_experts : 4
 n_shared_experts: 1
 top_k : 2
 use_mlp: True

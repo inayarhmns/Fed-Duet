@@ -662,6 +662,7 @@ class FedDuetTrainer:
         for global_round in range(self.com_rounds):
             self.current_round = global_round
             print(f"\n=== Global Round [{global_round + 1}/{self.com_rounds}] ===")
+            print(f"[Round {global_round}] GPU allocated: {torch.cuda.memory_allocated()/1e9:.2f}GB, reserved: {torch.cuda.memory_reserved()/1e9:.2f}GB")
 
             client_states = []
             client_metrics = []
@@ -690,7 +691,7 @@ class FedDuetTrainer:
                 # print(f"[Server] Round {global_round} | Client {client_id} 分配专家索引: {indices}")
                 print(f"indices for client {client_id}: {indices}")
                 print(f"expert_ctx_list shape for client {client_id}: { expert_ctx_list.shape if isinstance(expert_ctx_list, torch.Tensor) else [ctx.shape for ctx in expert_ctx_list]}")
-                print(f"expert_ctx_list for client {client_id}: {expert_ctx_list}")
+                # print(f"expert_ctx_list for client {client_id}: {expert_ctx_list}")
 
 
                 self.client_model.set_global_experts(expert_ctx_list)

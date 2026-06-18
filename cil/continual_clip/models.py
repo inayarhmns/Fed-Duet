@@ -107,6 +107,8 @@ class ClassIncremental(nn.Module):
         self.model = self.model.cuda()
         devices = list(range(torch.cuda.device_count()))
         print("Using devices", devices)
+        print(f"[Task {task_id} START] GPU allocated: {torch.cuda.memory_allocated()/1e9:.2f}GB, reserved: {torch.cuda.memory_reserved()/1e9:.2f}GB")
+
 
         # texts only contains the number of classes of number of increments, e.g. 5
         # e.g. texts: ['a bad photo of a airplane.', 'a bad photo of a automobile.', 'a bad photo of a bird.', 'a bad photo of a cat.', 'a bad photo of a deer.']
@@ -152,8 +154,15 @@ class ClassIncremental(nn.Module):
             if cfg.use_FedDuet:
                 # 调用 FedDuet 训练
                 print("using FedDuet")
+                print(f"[Task {task_id} BEFORE deepcopy] GPU allocated: {torch.cuda.memory_allocated()/1e9:.2f}GB, reserved: {torch.cuda.memory_reserved()/1e9:.2f}GB")
+
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
                 global_model = self.model
                 client_model = copy.deepcopy(self.model) 
+                print(f"[Task {task_id} AFTER deepcopy] GPU allocated: {torch.cuda.memory_allocated()/1e9:.2f}GB, reserved: {torch.cuda.memory_reserved()/1e9:.2f}GB")
+
                 current_classnames = self.get_task_classes(task_id)
 
                 result = fedduet_train(
@@ -194,6 +203,9 @@ class ClassIncremental(nn.Module):
                 else:
                     raise ValueError(f"Unsupported federated method in this refactored version. Only 'FedDuet' is supported.")
 
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
         self.model = self.model.cuda()
         self.model.eval()
 
@@ -283,8 +295,14 @@ class DomainIncremental(nn.Module):
             print("----------------federated learning----------------")
             if cfg.use_fedDuet:
                 print("using fedduet")
+                print(f"[Task {task_id} BEFORE deepcopy] GPU allocated: {torch.cuda.memory_allocated()/1e9:.2f}GB, reserved: {torch.cuda.memory_reserved()/1e9:.2f}GB")
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
                 global_model = self.model
                 client_model = copy.deepcopy(self.model)
+                print(f"[Task {task_id} AFTER deepcopy] GPU allocated: {torch.cuda.memory_allocated()/1e9:.2f}GB, reserved: {torch.cuda.memory_reserved()/1e9:.2f}GB")
+
                 current_classnames = self.classes_names
                 result = fedduet_train(
                     global_model=global_model,
@@ -320,7 +338,9 @@ class DomainIncremental(nn.Module):
                     self.model.update_prompt_learner(prev_ctx=self.ctx,
                                                      new_classnames=self.classes_names)
 
-
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
         self.model = self.model.cuda()
         self.model.eval()
 
