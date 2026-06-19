@@ -21,7 +21,7 @@ compress: False
 
 batch_size: 32
 increment: ${initial_increment}
-initial_increment: 5
+initial_increment: 2
 scenario: "class"
 dataset: "cifar10"
 class_num: 10
